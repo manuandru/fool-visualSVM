@@ -1,14 +1,11 @@
 package visualsvm;
 
-import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.util.ArrayList;
+import javax.swing.*;
+import java.util.*;
 import java.util.List;
-import java.util.Optional;
-import java.util.Vector;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
+import java.util.stream.*;
 
 public class ExecuteVM {
 
@@ -16,7 +13,6 @@ public class ExecuteVM {
 
     public static final int MEMSIZE = 10000;
     public static final int CODESIZE = 10000;
-
     private int[] code;
     private int[] memory;
 
@@ -33,6 +29,9 @@ public class ExecuteVM {
     private final JPanel buttonPanel;
     private final JList<CodeLine> asmList;
     private final JList<String> stackList, heapList;
+    private final JButton backStep;
+    private final JButton backToBreakPoint;
+    private final JButton reset;
     private final JButton nextStep;
     private final JButton play;
     private final JPanel registerPanel;
@@ -46,9 +45,10 @@ public class ExecuteVM {
 
     private int[] sourceMap;
     private List<String> source;
+    private int debugLineCode = 0;
 
     public ExecuteVM(int[] code, int[] sourceMap, List<String> source) {
-        boolean printArgumentLineNumber=false;
+        boolean printArgumentLineNumber = false;
         this.code = code;
         this.sourceMap = sourceMap;
         this.source = source;
@@ -61,10 +61,19 @@ public class ExecuteVM {
         this.buttonPanel.setLayout(new BoxLayout(this.buttonPanel, BoxLayout.Y_AXIS));
         this.play = new JButton("PLAY");
         this.play.addActionListener(e -> this.playButtonHandler());
+        this.reset = new JButton("RESET");
+        this.reset.addActionListener(e -> this.resetButtonHandler());
+        this.backToBreakPoint = new JButton("BACK TO BREAK POINT");
+        this.backToBreakPoint.addActionListener(e -> this.backToBreakPointButtonHandler());
+        this.backStep = new JButton("BACK STEP");
+        this.backStep.addActionListener(e -> this.backStepButtonHandler());
         this.nextStep = new JButton("STEP");
         this.nextStep.addActionListener(e -> this.stepButtonHandler());
         this.buttonPanel.add(this.play);
         this.buttonPanel.add(this.nextStep);
+        this.buttonPanel.add(this.reset);
+        this.buttonPanel.add(this.backToBreakPoint);
+        this.buttonPanel.add(this.backStep);
 
         this.registerPanel = new JPanel();
         this.tmLabel = new JLabel();
@@ -103,7 +112,7 @@ public class ExecuteVM {
             // => setting same address of first function instruction
             if (line.contains(":")) {
             //    commandLines.add(String.format("%5d: %s", realIp, line));
-                codeLines.add(CodeLine.simpleLine("       "+line));
+                codeLines.add(CodeLine.simpleLine("       " + line));
                 continue;
             }
 
@@ -171,7 +180,6 @@ public class ExecuteVM {
         this.outputScroll = new JScrollPane(this.outputText, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
                 JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
 
-
         setMem();
         this.frame.getContentPane().setLayout(new BorderLayout());
         this.frame.add(mainPanel, BorderLayout.CENTER);
@@ -208,6 +216,66 @@ public class ExecuteVM {
         });
     }
 
+    private void reset() {
+        this.memory = new int[MEMSIZE];
+        this.tm = 0;
+        this.ra = 0;
+        this.fp = MEMSIZE;
+        this.ip = 0;
+        this.sp = MEMSIZE;
+        this.hp = 0;
+        this.nextStep.setEnabled(true);
+        this.play.setEnabled(true);
+        this.outputText.setText("");
+    }
+
+    private void resetButtonHandler() {
+        this.debugLineCode = 0;
+        this.reset();
+        this.update();
+    }
+
+    private void backToBreakPointButtonHandler() {
+        this.reset();
+        int nearlestBreakpoint = 0;
+        int tempBreakpoint = 0;
+        while (this.step()) {
+            tempBreakpoint++;
+            if (lineHasBreakpoint()) {
+                nearlestBreakpoint = tempBreakpoint;
+            }
+
+            if (tempBreakpoint + 1  == this.debugLineCode) {
+                break;
+            }
+        }
+        this.debugLineCode = nearlestBreakpoint+1;
+        this.backStepButtonHandler();
+
+    }
+
+    private void backStepButtonHandler() {
+        this.reset();
+        if (this.debugLineCode < 2) {
+            this.debugLineCode = 0;
+            this.update();
+        } else {
+            this.debugLineCode--;
+            int tempBreakpoint = 0;
+            while (this.step()) {
+                tempBreakpoint++;
+                if (tempBreakpoint == this.debugLineCode) {
+                    this.update();
+                    return;
+                }
+            }
+            this.nextStep.setEnabled(false);
+            this.play.setEnabled(false);
+            ip--;
+            this.update();
+        }
+    }
+
     private <E> void removeListenersFrom(JList<E> list) {
         for (MouseListener m : list.getMouseListeners()) {
             list.removeMouseListener(m);
@@ -231,8 +299,6 @@ public class ExecuteVM {
         }
         this.keyboardCommand = "";
     }
-
-
 
     private void setMem() {
         // Codice per non visualizzare 0 in memoria
@@ -290,6 +356,7 @@ public class ExecuteVM {
 
     private void playButtonHandler() {
         while (this.step()) {
+            debugLineCode++;
             if (lineHasBreakpoint()) {
                 this.update();
                 return;
@@ -313,6 +380,7 @@ public class ExecuteVM {
             this.nextStep.setEnabled(false);
             this.play.setEnabled(false);
         } else {
+            this.debugLineCode++;
             this.update();
         }
     }
