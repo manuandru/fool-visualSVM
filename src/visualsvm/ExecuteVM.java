@@ -348,6 +348,10 @@ public class ExecuteVM {
         int dest = this.sourceMap[this.ip] * s.getMaximum() / this.codeLineCount - s.getHeight() / 2;
         s.setValue(Math.max(dest, 0));
         setMem();
+        var condToDisableButton = this.ip != 0;
+        this.reset.setEnabled(condToDisableButton);
+        this.backStep.setEnabled(condToDisableButton);
+        this.backToBreakPoint.setEnabled(condToDisableButton);
     }
 
     public void cpu() {
@@ -373,6 +377,13 @@ public class ExecuteVM {
                 .hasBreakpoint()
                 .orElse(false);
     }
+
+//    private int getBreakPointCount() {
+//        return (int) this.codeLines.stream()
+//                .map(CodeLine::hasBreakpoint)
+//                .filter(opt -> opt.orElse(false))
+//                .count();
+//    }
 
     private void stepButtonHandler() {
         boolean play = this.step();
